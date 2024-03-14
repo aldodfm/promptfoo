@@ -35,6 +35,10 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 WORKDIR /app
 
+RUN chgrp -R 0 /app 
+RUN chmod -R g=u /app 
+RUN chmod -R g+rwx /app
+
 COPY --from=builder /app/src/web/nextui/public ./public
 COPY --from=builder /app/src/web/nextui/.next/standalone ./
 COPY --from=builder /app/src/web/nextui/.next/static ./.next/static
