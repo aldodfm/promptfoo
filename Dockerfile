@@ -44,6 +44,15 @@ COPY --from=builder /app/src/web/nextui/.next/standalone ./
 COPY --from=builder /app/src/web/nextui/.next/static ./.next/static
 
 RUN mkdir -p /root/.promptfoo/output
+RUN mkdir -p /.promptfoo/output
+
+RUN chgrp -R 0 /root/.promptfoo/ 
+RUN chmod -R g=u /root/.promptfoo/ 
+RUN chmod -R g+rwx /root/.promptfoo/
+
+RUN chgrp -R 0 /.promptfoo/ 
+RUN chmod -R g=u /.promptfoo/ 
+RUN chmod -R g+rwx /.promptfoo/
 
 # Create a script to write environment variables to .env file
 RUN echo -e '#!/bin/sh\n\
