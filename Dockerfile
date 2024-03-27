@@ -42,6 +42,7 @@ RUN chmod -R g+rwx /app
 COPY --from=builder /app/src/web/nextui/public ./public
 COPY --from=builder /app/src/web/nextui/.next/standalone ./
 COPY --from=builder /app/src/web/nextui/.next/static ./.next/static
+COPY --from=builder /app/drizzle ./.next/server/drizzle
 
 RUN mkdir -p /root/.promptfoo/output
 RUN mkdir -p /.promptfoo/output

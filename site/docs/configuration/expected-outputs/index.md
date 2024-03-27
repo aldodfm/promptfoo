@@ -310,3 +310,53 @@ These metrics will be shown in the UI:
 ![llm eval metrics](/img/docs/named-metrics.png)
 
 See [named metrics example](https://github.com/promptfoo/promptfoo/tree/main/examples/named-metrics).
+
+## Running assertions directly on outputs
+
+If you already have LLM outputs and want to run assertions on them, the `eval` command supports standalone assertion files.
+
+Put your outputs in a JSON string array, like this `output.json`:
+
+```json
+[
+  "Hello world",
+  "Greetings, planet",
+  "Salutations, Earth"
+]
+```
+
+And create a list of assertions (`asserts.yaml`):
+
+```yaml
+- type: icontains
+  value: hello
+
+- type: javascript
+  value: 1 / (output.length + 1)  # prefer shorter outputs
+
+- type: model-graded-closedqa
+  value: ensure that the output contains a greeting
+```
+
+Then run the eval command:
+
+```sh
+promptfoo eval --assertions asserts.yaml --model-outputs outputs.json
+```
+
+### Tagging outputs
+
+Promptfoo accepts a slightly more complex JSON structure that includes an `output` field for the model's output and a `tags` field for the associated tags. These tags are shown in the web UI as a comma-separated list.  It's useful if you want to keep track of certain output attributes:
+
+```json
+[
+  {"output": "Hello world", "tags": ["foo", "bar"]},
+  {"output": "Greetings, planet", "tags": ["baz", "abc"]},
+  {"output": "Salutations, Earth", "tags": ["def", "ghi"]}
+]
+```
+
+
+### Processing and formatting outputs
+
+If you need to do any processing/formatting of outputs, use a [Javascript provider](/docs/providers/custom-api/), [Python provider](https://promptfoo.dev/docs/providers/python/), or [custom script](/docs/providers/custom-script/).

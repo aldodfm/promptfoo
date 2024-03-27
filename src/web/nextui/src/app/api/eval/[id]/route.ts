@@ -11,27 +11,29 @@ import { readResult, updateResult } from '@/../../../util';
 
 export const dynamic = IS_RUNNING_LOCALLY ? 'auto' : 'force-dynamic';
 
-async function getDataForId(id: string): Promise<{data: ResultsFile | null; filePath: FilePath; uuid: string}> {
-  let uuid: string;
-  let filePath: FilePath;
-  if (uuidValidate(id)) {
-    uuid = id;
-    filePath = (await store.get(`uuid:${id}`)) as string;
+async function getDataForId(id: string): Promise<{data: ResultsFile | null; evalId: string; uuid: string}> {
+  let uuidLookup: string;
+  let evalId: FilePath;
+  const actualUuid = id.includes(':') ? id.split(':')[1] : id;
+  if (uuidValidate(actualUuid)) {
+    uuidLookup = id;
+    evalId = (await store.get(`uuid:${id}`)) as string;
   } else {
-    uuid = (await store.get(`file:${id}`)) as string;
-    filePath = id;
+    uuidLookup = (await store.get(`file:${id}`)) as string;
+    evalId = id;
   }
   let data: ResultsFile | null = null;
   try {
-    const fileContents = readResult(filePath);
-    if (!fileContents) {
-      throw new Error('No file contents');
+    const eval_ = await readResult(evalId);
+    if (!eval_) {
+      throw new Error('Could not find eval');
     }
-    data = fileContents?.result;
+    data = eval_?.result;
   } catch (error) {
+    console.error('Failed to read eval', error);
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       try {
-        data = JSON.parse(filePath) as ResultsFile;
+        data = JSON.parse(evalId) as ResultsFile;
       } catch {
         throw new Error('Invalid JSON');
       }
@@ -39,17 +41,19 @@ async function getDataForId(id: string): Promise<{data: ResultsFile | null; file
       throw error;
     }
   }
-  return { data, filePath, uuid };
+  return { data, evalId, uuid: uuidLookup };
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const data = await getDataForId(params.id);
-    if (!data) {
+    const resp = await getDataForId(params.id);
+    if (!resp) {
+      console.error('Data not found for id', params.id);
       return NextResponse.json({ error: 'Data not found or invalid JSON' }, { status: 404 });
     }
-    return NextResponse.json({ data });
+    return NextResponse.json(resp);
   } catch (error) {
+    console.error('Failed to fetch data', error);
     return NextResponse.json(
       { error: 'An error occurred while fetching the data', details: error },
       { status: 500 },
@@ -68,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!current) {
       return NextResponse.json({ error: 'Data not found' }, { status: 404 });
     }
-    updateResult(current.filePath, newData.config, newData.table);
+    updateResult(current.evalId, newData.config, newData.table);
     return NextResponse.json({ message: 'Eval updated successfully' }, { status: 200 });
   } catch (err) {
     console.error(err);

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { execFile, spawn } from 'child_process';
 
+import async from 'async';
 import rouge from 'rouge';
 import invariant from 'tiny-invariant';
 import yaml from 'js-yaml';
@@ -31,6 +32,10 @@ import { OpenAiChatCompletionProvider } from './providers/openai';
 
 import type { Assertion, AssertionType, GradingResult, AtomicTestCase, ApiProvider } from './types';
 import { runPythonCode } from './python/wrapper';
+
+const ASSERTIONS_MAX_CONCURRENCY = process.env.PROMPTFOO_ASSERTIONS_MAX_CONCURRENCY
+  ? parseInt(process.env.PROMPTFOO_ASSERTIONS_MAX_CONCURRENCY, 10)
+  : 3;
 
 export const MODEL_GRADED_ASSERTION_TYPES = new Set<AssertionType>([
   'answer-relevance',
@@ -103,25 +108,23 @@ export async function runAssertions({
     prompt: 0,
     completion: 0,
   };
-
   if (!test.assert || test.assert.length < 1) {
     return { pass: true, score: 1, reason: 'No assertions', tokensUsed, assertion: null };
   }
-
   let totalScore = 0;
   let totalWeight = 0;
   let allPass = true;
   let failedReason = '';
   const componentResults: GradingResult[] = [];
   const namedScores: Record<string, number> = {};
-  for (const assertion of test.assert) {
+
+  await async.forEachOfLimit(test.assert, ASSERTIONS_MAX_CONCURRENCY, async (assertion, index) => {
     if (assertion.type.startsWith('select-')) {
       // Select-type assertions are handled separately because they depend on multiple outputs.
-      continue;
+      return;
     }
     const weight = assertion.weight || 1;
     totalWeight += weight;
-
     const result = await runAssertion({
       prompt,
       provider,
@@ -133,26 +136,23 @@ export async function runAssertions({
       cost,
     });
     totalScore += result.score * weight;
-    componentResults.push(result);
-
+    componentResults[Number(index)] = result;
     if (assertion.metric) {
       namedScores[assertion.metric] = (namedScores[assertion.metric] || 0) + result.score;
     }
-
     if (result.tokensUsed) {
       tokensUsed.total += result.tokensUsed.total;
       tokensUsed.prompt += result.tokensUsed.prompt;
       tokensUsed.completion += result.tokensUsed.completion;
     }
-
     if (!result.pass) {
       allPass = false;
       failedReason = result.reason;
       if (process.env.PROMPTFOO_SHORT_CIRCUIT_TEST_FAILURES) {
-        return result;
+        throw new Error(result.reason);
       }
     }
-  }
+  });
 
   const finalScore = totalScore / totalWeight;
   let finalReason = allPass ? 'All assertions passed' : failedReason;
@@ -165,7 +165,6 @@ export async function runAssertions({
       finalReason = `Aggregate score ${finalScore.toFixed(2)} < ${test.threshold} threshold`;
     }
   }
-
   return {
     pass: allPass,
     score: finalScore,
@@ -1043,21 +1042,28 @@ ${assertion.value}`,
 
   if (baseType === 'classifier') {
     invariant(
-      typeof renderedValue === 'string',
-      '"classifier" assertion type must have a string value',
+      typeof renderedValue === 'string' || typeof renderedValue === 'undefined',
+      '"classifier" assertion type must have a string value or be undefined',
     );
 
     // Assertion provider overrides test provider
     test.options = test.options || {};
     test.options.provider = assertion.provider || test.options.provider;
+    const classificationResult = await matchesClassification(
+      renderedValue,
+      outputString,
+      assertion.threshold ?? 1,
+      test.options,
+    );
+
+    if (inverse) {
+      classificationResult.pass = !classificationResult.pass;
+      classificationResult.score = 1 - classificationResult.score;
+    }
+
     return {
       assertion,
-      ...(await matchesClassification(
-        renderedValue,
-        outputString,
-        assertion.threshold ?? 1,
-        test.options,
-      )),
+      ...classificationResult,
     };
   }
 

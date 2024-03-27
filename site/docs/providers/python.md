@@ -2,7 +2,7 @@
 sidebar_position: 51
 ---
 
-# Python
+# Custom Python
 
 The `python` provider allows you to use a Python script as an API provider for evaluating prompts. This is useful when you have custom logic or models implemented in Python that you want to integrate with your test suite.
 
@@ -32,7 +32,8 @@ import json
 
 def call_api(prompt, options, context):
     # The 'options' parameter contains additional configuration for the API call.
-    additional_option = options.get('additionalOption', None)
+    config = options.get('config', None)
+    additional_option = config.get('additionalOption', None)
 
     # The 'context' parameter provides info about which vars were used to create the final prompt.
     user_variable = context['vars'].get('userVariable', None)

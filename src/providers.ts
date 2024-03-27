@@ -12,10 +12,7 @@ import {
   OpenAiEmbeddingProvider,
   OpenAiImageProvider,
 } from './providers/openai';
-import { 
-  AnthropicCompletionProvider, 
-  AnthropicMessagesProvider
-} from './providers/anthropic';
+import { AnthropicCompletionProvider, AnthropicMessagesProvider } from './providers/anthropic';
 import { ReplicateProvider } from './providers/replicate';
 import {
   LocalAiCompletionProvider,
@@ -34,6 +31,7 @@ import { MistralChatCompletionProvider } from './providers/mistral';
 import { WebhookProvider } from './providers/webhook';
 import { ScriptCompletionProvider } from './providers/scriptCompletion';
 import {
+  AzureOpenAiAssistantProvider,
   AzureOpenAiChatCompletionProvider,
   AzureOpenAiCompletionProvider,
   AzureOpenAiEmbeddingProvider,
@@ -43,6 +41,7 @@ import {
   HuggingfaceSentenceSimilarityProvider,
   HuggingfaceTextClassificationProvider,
   HuggingfaceTextGenerationProvider,
+  HuggingfaceTokenExtractionProvider,
 } from './providers/huggingface';
 import { AwsBedrockCompletionProvider } from './providers/bedrock';
 import { PythonProvider } from './providers/pythonCompletion';
@@ -112,8 +111,9 @@ export async function loadApiProvider(
   } = {},
 ): Promise<ApiProvider> {
   const { options = {}, basePath, env } = context;
-  const providerOptions = {
-    id: options.id,
+  const providerOptions: ProviderOptions = {
+    // Hack(ian): Override id with label. This makes it so that debug and display info, which rely on id, will use the label instead.
+    id: options.label || options.id,
     config: {
       ...options.config,
       basePath,
@@ -130,7 +130,7 @@ export async function loadApiProvider(
   } else if (providerPath === 'echo') {
     return {
       id: () => 'echo',
-      callApi: async (input) => ({output: input}),
+      callApi: async (input) => ({ output: input }),
     };
   } else if (providerPath?.startsWith('exec:')) {
     // Load script module
@@ -172,6 +172,8 @@ export async function loadApiProvider(
 
     if (modelType === 'chat') {
       return new AzureOpenAiChatCompletionProvider(deploymentName, providerOptions);
+    } else if (modelType === 'assistant') {
+      return new AzureOpenAiAssistantProvider(deploymentName, providerOptions);
     } else if (modelType === 'embedding' || modelType === 'embeddings') {
       return new AzureOpenAiEmbeddingProvider(
         deploymentName || 'text-embedding-ada-002',
@@ -181,7 +183,7 @@ export async function loadApiProvider(
       return new AzureOpenAiCompletionProvider(deploymentName, providerOptions);
     } else {
       throw new Error(
-        `Unknown Azure OpenAI model type: ${modelType}. Use one of the following providers: azureopenai:chat:<model name>, azureopenai:completion:<model name>`,
+        `Unknown Azure OpenAI model type: ${modelType}. Use one of the following providers: azureopenai:chat:<model name>, azureopenai:assistant:<assistant id>, azureopenai:completion:<model name>`,
       );
     }
   } else if (providerPath?.startsWith('anthropic:')) {
@@ -189,8 +191,8 @@ export async function loadApiProvider(
     const modelType = splits[1];
     const modelName = splits[2];
 
-    if (modelType === 'messages'){
-      return new AnthropicMessagesProvider(modelName, providerOptions)
+    if (modelType === 'messages') {
+      return new AnthropicMessagesProvider(modelName, providerOptions);
     } else if (modelType === 'completion') {
       return new AnthropicCompletionProvider(modelName, providerOptions);
     } else if (AnthropicCompletionProvider.ANTHROPIC_COMPLETION_MODELS.includes(modelType)) {
@@ -206,19 +208,15 @@ export async function loadApiProvider(
     const modelName = splits.slice(2).join(':');
 
     if (modelType === 'completion') {
+      // Backwards compatibility: `completion` used to be required
       return new AwsBedrockCompletionProvider(modelName || 'anthropic.claude-v2', providerOptions);
-    } else if (AwsBedrockCompletionProvider.AWS_BEDROCK_COMPLETION_MODELS.includes(modelType)) {
-      return new AwsBedrockCompletionProvider(modelType, providerOptions);
-    } else {
-      throw new Error(
-        `Unknown Amazon Bedrock model type: ${modelType}. Use one of the following providers: bedrock:completion:<model name>`,
-      );
     }
+    return new AwsBedrockCompletionProvider(modelType, providerOptions);
   } else if (providerPath?.startsWith('huggingface:') || providerPath?.startsWith('hf:')) {
     const splits = providerPath.split(':');
     if (splits.length < 3) {
       throw new Error(
-        `Invalid Huggingface provider path: ${providerPath}. Use one of the following providers: huggingface:feature-extraction:<model name>, huggingface:text-generation:<model name>`,
+        `Invalid Huggingface provider path: ${providerPath}. Use one of the following providers: huggingface:feature-extraction:<model name>, huggingface:text-generation:<model name>, huggingface:text-classification:<model name>, huggingface:token-classification:<model name>`,
       );
     }
     const modelName = splits.slice(2).join(':');
@@ -230,9 +228,11 @@ export async function loadApiProvider(
       return new HuggingfaceTextGenerationProvider(modelName, providerOptions);
     } else if (splits[1] === 'text-classification') {
       return new HuggingfaceTextClassificationProvider(modelName, providerOptions);
+    } else if (splits[1] === 'token-classification') {
+      return new HuggingfaceTokenExtractionProvider(modelName, providerOptions);
     } else {
       throw new Error(
-        `Invalid Huggingface provider path: ${providerPath}. Use one of the following providers: huggingface:feature-extraction:<model name>, huggingface:text-generation:<model name>`,
+        `Invalid Huggingface provider path: ${providerPath}. Use one of the following providers: huggingface:feature-extraction:<model name>, huggingface:text-generation:<model name>, huggingface:text-classification:<model name>, huggingface:token-classification:<model name>`,
       );
     }
   } else if (providerPath?.startsWith('replicate:')) {
@@ -296,7 +296,9 @@ export async function loadApiProvider(
   }
 
   // Load custom module
-  const CustomApiProvider = (await import(path.join(process.cwd(), providerPath))).default;
+  const CustomApiProvider = (
+    await import(path.resolve(path.join(basePath || process.cwd(), providerPath)))
+  ).default;
   return new CustomApiProvider(options);
 }
 

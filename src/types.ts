@@ -46,6 +46,8 @@ export interface EnvOverrides {
   REPLICATE_API_KEY?: string;
   REPLICATE_API_TOKEN?: string;
   LOCALAI_BASE_URL?: string;
+  MISTRAL_API_HOST?: string;
+  MISTRAL_API_BASE_URL?: string;
   PALM_API_KEY?: string;
   PALM_API_HOST?: string;
   GOOGLE_API_KEY?: string;
@@ -60,8 +62,10 @@ export interface EnvOverrides {
 
 export interface ProviderOptions {
   id?: ProviderId;
+  label?: ProviderLabel;
   config?: any;
   prompts?: string[]; // List of prompt display strings
+  env?: EnvOverrides;
 }
 
 export interface CallApiContextParams {
@@ -73,14 +77,24 @@ export interface CallApiOptionsParams {
 }
 
 export interface ApiProvider {
+  // Unique identifier for the provider
   id: () => string;
+
+  // Text generation function
   callApi: (
     prompt: string,
     context?: CallApiContextParams,
     options?: CallApiOptionsParams,
   ) => Promise<ProviderResponse>;
+
+  // Embedding function
   callEmbeddingApi?: (prompt: string) => Promise<ProviderEmbeddingResponse>;
+
+  // Classification function
   callClassificationApi?: (prompt: string) => Promise<ProviderClassificationResponse>;
+
+  // Shown on output 
+  label?: ProviderLabel;
 }
 
 export interface ApiEmbeddingProvider extends ApiProvider {
@@ -205,10 +219,8 @@ export interface PromptWithMetadata {
   prompt: Prompt;
   recentEvalDate: Date;
   recentEvalId: string;
-  recentEvalFilepath: string;
   evals: {
     id: string;
-    filePath: FilePath;
     datasetId: string;
     metrics: CompletedPrompt['metrics'];
   }[];
@@ -216,7 +228,7 @@ export interface PromptWithMetadata {
 }
 
 export interface EvaluateResult {
-  provider: Pick<ProviderOptions, 'id'>;
+  provider: Pick<ProviderOptions, 'id' | 'label'>;
   prompt: Prompt;
   vars: Record<string, string | object>;
   response?: ProviderResponse;
@@ -376,7 +388,6 @@ export interface TestCasesWithMetadataPrompt {
   prompt: CompletedPrompt;
   id: string;
   evalId: string;
-  evalFilepath: FilePath;
 }
 
 export interface TestCasesWithMetadata {
@@ -384,7 +395,6 @@ export interface TestCasesWithMetadata {
   testCases: FilePath | (FilePath | TestCase)[];
   recentEvalDate: Date;
   recentEvalId: string;
-  recentEvalFilepath: FilePath;
   count: number;
   prompts: TestCasesWithMetadataPrompt[];
 }
@@ -463,6 +473,8 @@ export interface TestSuite {
 
 export type ProviderId = string;
 
+export type ProviderLabel = string;
+
 export type ProviderFunction = ApiProvider['callApi'];
 
 export type ProviderOptionsMap = Record<ProviderId, ProviderOptions>;
@@ -510,7 +522,6 @@ export type UnifiedConfig = TestSuiteConfig & {
 
 export interface EvalWithMetadata {
   id: string;
-  filePath: FilePath;
   date: Date;
   config: Partial<UnifiedConfig>;
   results: EvaluateSummary;

@@ -131,12 +131,13 @@ prompts:
   prompts/llama_completion_prompt.txt: llama_completion_prompt
 
 providers:
-  - openai:gpt-3.5-turbo-0613:
-      prompts: gpt_chat_prompt
-  - openai:gpt-4-turbo-0613:
-      prompts: gpt_chat_prompt
-  - replicate:replicate/llama70b-v2-chat:e951f18578850b652510200860fc4ea62b3b16fac280f83ff32282f87bbd2e48:
-      prompts: llama_completion_prompt
+  - id: openai:gpt-3.5-turbo-0613
+    prompts: gpt_chat_prompt
+  - id: openai:gpt-4-turbo-0613
+    prompts: gpt_chat_prompt
+  - id: replicate:meta/llama70b-v2-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3
+    label: llama70b-v2-chat
+    prompts: llama_completion_prompt
 ```
 
 In this configuration, the `gpt_chat_prompt` is used for both GPT-3.5 and GPT-4 models, while the `llama_completion_prompt` is used for the Llama v2 model. The prompts are defined in separate files within the `prompts` directory.
@@ -283,6 +284,7 @@ The tests file optionally supports several special columns:
   - For multiple assertions, use `__expected1`, `__expected2`, `__expected3`, etc.
 - `__prefix`: This string is prepended to each prompt before it's sent to the API
 - `__suffix`: This string is appended to each prompt before it's sent to the API
+- `__description`: The test description
 
 ## Output File
 

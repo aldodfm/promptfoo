@@ -122,8 +122,8 @@ export default function Prompts() {
               </TableCell>
               <TableCell style={{ width: '20%' }}>
                 {promptRow.recentEvalDate ? (
-                  <Link href={`/eval?file=${promptRow.recentEvalId}`}>
-                    {promptRow.recentEvalDate}
+                  <Link href={`/eval?evalId=${promptRow.recentEvalId}`}>
+                    {promptRow.recentEvalDate.slice(0, 10)}
                   </Link>
                 ) : (
                   'Unknown'
